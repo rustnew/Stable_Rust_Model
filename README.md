@@ -1,5 +1,6 @@
 <img width="1911" height="1062" alt="image" src="https://github.com/user-attachments/assets/47154d17-cbf9-40d3-a4aa-a528b4e4c317" />
 
+<img width="1909" height="923" alt="image" src="https://github.com/user-attachments/assets/db9f5707-d27e-446c-9343-6dd1ac5541f2" />
 
 # 🦟 Malaria Detection AI - CNN avec Burn Framework
 
