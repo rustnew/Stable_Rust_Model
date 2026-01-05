@@ -1,4 +1,6 @@
 use std::{net::SocketAddr, path::PathBuf};
+use std::env;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use axum::{
@@ -13,8 +15,18 @@ use serde::Serialize;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
 
-use tract_onnx::prelude::*;
-use tract_onnx::prelude::{TypedRunnableModel, TypedModel};
+// Burn (CPU backend) for native inference
+use burn::{
+    prelude::Module,
+    record::{BinFileRecorder, FullPrecisionSettings, Recorder},
+    tensor::Tensor,
+};
+use burn_ndarray::{NdArray, NdArrayDevice};
+
+// Local, inference-only model definition (no training deps)
+#[path = "./malaria_cnn_infer.rs"]
+mod malaria_cnn;
+use malaria_cnn::MalariaCNN;
 
 #[derive(Clone)]
 struct AppConfig {
@@ -24,9 +36,9 @@ struct AppConfig {
 }
 
 #[derive(Clone)]
-struct OnnxState {
+struct BurnState {
     cfg: AppConfig,
-    model: TypedRunnableModel<TypedModel>,
+    model_path: PathBuf,
 }
 
 #[derive(Serialize)]
@@ -44,10 +56,25 @@ async fn main() -> Result<()> {
         num_classes: 2,
     };
 
-    let model_path = PathBuf::from("./malaria-model.onnx");
-    let model = load_onnx_model(&model_path, &cfg)?;
+    // Allow overriding model path via env var MODEL_PATH; default to Burn checkpoint
+    let model_path_str = env::var("MODEL_PATH").unwrap_or_else(|_| "./malaria-model.bin".to_string());
+    let model_path = PathBuf::from(&model_path_str);
 
-    let state = OnnxState { cfg, model };
+    // Proactive existence check to provide a clearer error message
+    if !model_path.exists() {
+        let cwd = std::env::current_dir().ok();
+        let hint = "Expected a Burn checkpoint (.bin). Ensure the file exists or set MODEL_PATH to the checkpoint path.";
+        let cwd_msg = cwd.map(|p| format!(" Current dir: {}.", p.display())).unwrap_or_default();
+        anyhow::bail!(
+            "Model checkpoint not found at {}. {}{}",
+            model_path.display(),
+            hint,
+            cwd_msg
+        );
+    }
+    println!("Loading Burn checkpoint from {}", model_path.display());
+    // Store only config and path in state to keep it Send + Sync
+    let state = BurnState { cfg, model_path };
 
     // CORS: allow localhost:3000
     let cors = CorsLayer::new()
@@ -69,17 +96,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn load_onnx_model(path: &PathBuf, cfg: &AppConfig) -> Result<TypedRunnableModel<TypedModel>> {
-    let model = tract_onnx::onnx()
-        .model_for_path(path)
-        .with_context(|| format!("Failed to read ONNX at {}", path.display()))?
-        .with_input_fact(0, InferenceFact::dt_shape(f32::datum_type(), tvec!(1, 3, cfg.image_height as i64, cfg.image_width as i64)))?
-        .into_optimized()?
-        .into_runnable()?;
-    Ok(model)
-}
-
-async fn predict(State(state): State<OnnxState>, mut multipart: Multipart) -> impl IntoResponse {
+async fn predict(State(state): State<BurnState>, mut multipart: Multipart) -> impl IntoResponse {
     // Pull first part named 'image'
     let mut image_bytes: Option<Vec<u8>> = None;
     while let Ok(Some(field)) = multipart.next_field().await {
@@ -99,23 +116,36 @@ async fn predict(State(state): State<OnnxState>, mut multipart: Multipart) -> im
         Err(e) => return (StatusCode::BAD_REQUEST, format!("Preprocess failed: {}", e)).into_response(),
     };
 
-    // Build ONNX input tensor [1, 3, H, W]
-    let input: Tensor = tract_ndarray::Array4::from_shape_vec(
-        (1, 3, state.cfg.image_height, state.cfg.image_width),
-        chw,
-    )
-    .unwrap()
-    .into();
+    // Prepare device and model per request (simple and thread-safe)
+    let device = NdArrayDevice::default();
 
-    // Run inference
-    let result = state.model.run(tvec!(input.into()));
-    let outputs = match result { Ok(o) => o, Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("ONNX run failed: {}", e)).into_response() };
-    let output = outputs[0].to_array_view::<f32>().unwrap(); // shape [1, 2]
-    let logits_dyn = output.index_axis(tract_ndarray::Axis(0), 0).to_owned();
-    let logits_vec: Vec<f32> = logits_dyn.iter().copied().collect();
+    // Build Burn tensor [1, 3, H, W]
+    let input_1d: Tensor<NdArray, 1> = Tensor::<NdArray, 1>::from_floats(chw.as_slice(), &device);
+    let input: Tensor<NdArray, 4> = input_1d.reshape([1, 3, state.cfg.image_height, state.cfg.image_width]);
+
+    // Instantiate and load model weights
+    let mut model: MalariaCNN<NdArray> = MalariaCNN::new(
+        &device,
+        3, 16, 32, 64, 128, 64, 2, 0.3,
+    );
+    let record = match BinFileRecorder::<FullPrecisionSettings>::new().load(state.model_path.clone().into(), &device) {
+        Ok(r) => r,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to load checkpoint: {:?}", e)).into_response(),
+    };
+    model = model.load_record(record);
+
+    let logits: Tensor<NdArray, 2> = model.forward(input);
+    let logits_data = logits.into_data();
+    let logits_vec: Vec<f32> = match logits_data.to_vec::<f32>() {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to read logits: {:?}", e)).into_response(),
+    };
 
     // Softmax
     let probs_vec = softmax(&logits_vec);
+    if probs_vec.len() < 2 {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Invalid model output length").into_response();
+    }
     let probs = [probs_vec[0], probs_vec[1]];
     let class_idx = if probs[1] >= probs[0] { 1 } else { 0 };
     let class = if class_idx == 1 { "Parasitized" } else { "Uninfected" };
@@ -144,6 +174,7 @@ fn preprocess_bytes(bytes: &[u8], target_height: usize, target_width: usize) -> 
 }
 
 fn softmax(v: &[f32]) -> Vec<f32> {
+    if v.is_empty() { return vec![]; }
     let max = v.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
     let exps: Vec<f32> = v.iter().map(|x| (*x - max).exp()).collect();
     let sum: f32 = exps.iter().sum();
