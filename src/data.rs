@@ -8,14 +8,14 @@ use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::{Path, PathBuf}, sync::Arc};
 
-/// Élément du dataset avec chemin d'image et label
+/// Dataset item containing image path and label
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MalariaItem {
     pub image_path: String,
     pub label: u8,
 }
 
-/// Dataset pour la détection du paludisme
+/// Dataset for malaria detection
 #[derive(Debug, Clone)]
 pub struct MalariaDataset {
     pub images: Vec<PathBuf>,
@@ -129,7 +129,7 @@ impl MalariaDataset {
         Ok(())
     }
 
-    /// ✅ CPU SEULEMENT - Prétraitement optimisé
+    /// ✅ CPU ONLY - Optimized preprocessing
     pub fn load_and_preprocess_image_raw(
         path: &Path,
         target_height: usize,
@@ -240,14 +240,14 @@ impl Dataset<MalariaItem> for MalariaDataset {
     }
 }
 
-/// Batch pour le modèle de paludisme
+/// Batch for the malaria model
 #[derive(Debug, Clone)]
 pub struct MalariaBatch<B: Backend> {
     pub images: Tensor<B, 4>,
     pub labels: Tensor<B, 1, Int>,
 }
 
-/// ✅ BATCHER CORRIGÉ - RÈGLE D'OR RESPECTÉE
+/// ✅ FIXED BATCHER - GOLDEN RULE RESPECTED
 pub struct MalariaBatcher<B: Backend> {
     pub image_height: usize,
     pub image_width: usize,
@@ -264,9 +264,9 @@ impl<B: Backend> MalariaBatcher<B> {
     }
 }
 
-// ✅ CORRECTION : Batcher prend 3 arguments génériques : B (Backend), I (Input), O (Output)
+// ✅ FIX: Batcher takes 3 generic arguments: B (Backend), I (Input), O (Output)
 impl<B: Backend> Batcher<B, MalariaItem, MalariaBatch<B>> for MalariaBatcher<B> {
-    /// ✅ CORRECTION CRITIQUE : Utilise EXCLUSIVEMENT le device fourni
+    /// ✅ CRITICAL FIX: Use ONLY the provided device
     fn batch(&self, items: Vec<MalariaItem>, device: &B::Device) -> MalariaBatch<B> {
         let batch_size = items.len();
         let expected_size = batch_size * 3 * self.image_height * self.image_width;
@@ -276,7 +276,7 @@ impl<B: Backend> Batcher<B, MalariaItem, MalariaBatch<B>> for MalariaBatcher<B> 
 
         let default_image = vec![0.0; self.image_height * self.image_width * 3];
 
-        // ✅ Prétraitement sur CPU
+        // ✅ Preprocessing on CPU
         for item in items {
             let image_data = match MalariaDataset::load_and_preprocess_image_raw(
                 Path::new(&item.image_path),
@@ -293,7 +293,7 @@ impl<B: Backend> Batcher<B, MalariaItem, MalariaBatch<B>> for MalariaBatcher<B> 
             labels_data.push(item.label as i64);
         }
 
-        // ✅ VÉRIFICATION TAILLE CRITIQUE (wgpu crash sans ça)
+        // ✅ CRITICAL SIZE CHECK (wgpu may crash without this)
         assert_eq!(
             images_data.len(),
             expected_size,
@@ -302,7 +302,7 @@ impl<B: Backend> Batcher<B, MalariaItem, MalariaBatch<B>> for MalariaBatcher<B> 
             expected_size
         );
 
-        // ✅ TRANSFERT GPU avec le device fourni (JAMAIS Device::default())
+        // ✅ GPU TRANSFER with the provided device (NEVER use Device::default())
         let images_tensor_1d = Tensor::<B, 1>::from_floats(images_data.as_slice(), device);
         let images_tensor = images_tensor_1d.reshape([batch_size, 3, self.image_height, self.image_width]);
         let labels_tensor = Tensor::<B, 1, Int>::from_ints(labels_data.as_slice(), device);

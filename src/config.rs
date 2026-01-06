@@ -1,52 +1,52 @@
-//! Configuration du modèle CNN équilibrée qualité/vitesse
+//! CNN model configuration balanced for quality/speed
 
 use serde::{Deserialize, Serialize};
 
-/// Configuration complète du modèle CNN pour la détection du paludisme
+/// Full CNN model configuration for malaria detection
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelConfig {
-    /// Largeur des images d'entrée
+    /// Input image width
     pub image_width: usize,
-    /// Hauteur des images d'entrée
+    /// Input image height
     pub image_height: usize,
-    /// Nombre de canaux (3 pour RGB, 1 pour grayscale)
+    /// Number of channels (3 for RGB, 1 for grayscale)
     pub image_channels: usize,
-    /// Nombre de filtres pour la première couche convolutive
+    /// Number of filters for the first convolutional layer
     pub conv1_filters: usize,
-    /// Nombre de filtres pour la deuxième couche convolutive
+    /// Number of filters for the second convolutional layer
     pub conv2_filters: usize,
-    /// Nombre de filtres pour la troisième couche convolutive
+    /// Number of filters for the third convolutional layer
     pub conv3_filters: usize,
-    /// Unités pour la première couche fully-connected
+    /// Units for the first fully-connected layer
     pub fc1_units: usize,
-    /// Unités pour la deuxième couche fully-connected
+    /// Units for the second fully-connected layer
     pub fc2_units: usize,
-    /// Nombre de classes de sortie (2: paludisme/non-paludisme)
+    /// Number of output classes (2: malaria/non-malaria)
     pub num_classes: usize,
-    /// Taux de dropout pour la régularisation
+    /// Dropout rate for regularization
     pub dropout_rate: f64,
-    /// Taux d'apprentissage pour l'optimiseur
+    /// Learning rate for the optimizer
     pub learning_rate: f64,
-    /// Taille des batches d'entraînement
+    /// Training batch size
     pub batch_size: usize,
-    /// Nombre d'époques d'entraînement
+    /// Number of training epochs
     pub num_epochs: usize,
-    /// Chemin vers le dataset d'entraînement
+    /// Path to the training dataset
     pub train_data_path: String,
-    /// Chemin vers le dataset de validation
+    /// Path to the validation dataset
     pub val_data_path: String,
-    /// Utiliser le cache des données
+    /// Whether to use data caching
     pub use_cache: bool,
-    /// Nombre de workers pour le data loading
+    /// Number of workers for data loading
     pub num_workers: usize,
-    /// Grad Accumulation Steps
+    /// Gradient accumulation steps
     pub grad_accum_steps: usize,
 }
 
 impl Default for ModelConfig {
     fn default() -> Self {
         Self {
-            // ✅ Commencer avec des tailles GPU SAFE
+            // ✅ Start with GPU-SAFE sizes
             image_width: 128,
             image_height: 128,
             image_channels: 3,
@@ -58,13 +58,13 @@ impl Default for ModelConfig {
             num_classes: 2,
             dropout_rate: 0.3,
             learning_rate: 0.001,
-            // ✅ Batch size petit au début pour stabilité GPU
+            // ✅ Small batch size initially for GPU stability
             batch_size: 4,
             num_epochs: 15,
             train_data_path: "data/train".to_string(),
             val_data_path: "data/val".to_string(),
-            use_cache: true, // ✅ Cache activé pour performance
-            num_workers: 2,  // ✅ Valeur conservative pour stabilité
+            use_cache: true, // ✅ Cache enabled for performance
+            num_workers: 2,  // ✅ Conservative value for stability
             grad_accum_steps: 1,
         }
     }

@@ -55,7 +55,7 @@ impl<B: AutodiffBackend> MalariaTrainer<B> {
         
         println!("📊 Dataset: {} train, {} valid", train_dataset.len(), valid_dataset.len());
         
-        // ✅ CORRECTION : Spécifier le Backend dans DataLoaderBuilder
+        // ✅ FIX: Specify the Backend in DataLoaderBuilder
         let batcher_train = MalariaBatcher::<B>::new(
             self.config.image_height,
             self.config.image_width,
@@ -66,7 +66,7 @@ impl<B: AutodiffBackend> MalariaTrainer<B> {
             self.config.image_width,
         );
         
-        // ✅ CORRECTION : DataLoaderBuilder attend le Backend en premier paramètre générique
+        // ✅ FIX: DataLoaderBuilder expects the Backend as the first generic parameter
         let dataloader_train = DataLoaderBuilder::<B, _, _>::new(batcher_train)
             .batch_size(self.config.batch_size)
             .shuffle(42)
