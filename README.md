@@ -46,28 +46,6 @@ cargo test
 cargo bench
 ```
 
-## 📁 Project Structure
-
-```
-Burn_malaria_model_2/
-├── Cargo.toml                 # Rust configuration
-├── Cargo.lock                 # Dependency lockfile
-├── src/
-│   ├── main.rs                # Main entry point
-│   ├── config/
-│   │   └── model_config.rs    # Hyperparameters configuration
-│   ├── model/
-│   │   └── malaria_cnn.rs     # CNN architecture
-│   ├── data/
-│   │   └── dataset.rs         # Dataset and batcher
-│   └── training/
-│       └── trainer.rs         # Training logic
-├── data/                      # Dataset (to create)
-│   ├── Parasitized/
-│   └── Uninfected/
-└── malaria-model-balanced/    # Saved models (auto-generated)
-```
-
 ## 🎓 Learnings and Insights
 
 ### ✅ Technical Wins
@@ -75,12 +53,6 @@ Burn_malaria_model_2/
 2. **Memory Optimization**: Efficient handling of 27,558 images
 3. **Stable Convergence**: BatchNorm and adaptive learning rate
 4. **Quality Preserved**: ~90% of original accuracy with 98% less time
-
-### 🚧 Challenges Faced
-1. **Initial Training Time**: 4 days estimated → optimization needed
-2. **Memory Management**: Cache vs performance trade-off
-3. **Rust Compilation**: Borrow checker learning curve
-4. **Data Loading**: Parallelization and I/O optimization
 
 ### 🔧 Implemented Solutions
 1. **Dimension Reduction**: 128×128 → 80×80 (quality preserved)
@@ -171,27 +143,6 @@ cargo test -- --nocapture  # With output
 ## 📄 License
 
 This project is distributed under the **MIT** license - see [LICENSE](LICENSE) for more details.
-
-### Academic Citation
-If you use this code in research, please cite:
-```
-@software{malaria_detection_2024,
-  author = {FOSSOUO WATO MARTIAL},
-  title = {Malaria Detection CNN with Burn Framework},
-  year = {2024},
-  publisher = {GitHub},
-  journal = {GitHub repository},
-  howpublished = {\url{https://github.com/rustnew/Malaria_model_2}}
-}
-```
-
-## 🙏 Acknowledgments
-
-- **Burn Team** for the excellent framework
-- **Rust Community** for support and resources
-- **NIH** for the public blood smear dataset
-- **Contributors** who continuously improve the project
-
 
 ### Run the Inference API (Rust)
 ```bash
