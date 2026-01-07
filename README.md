@@ -171,3 +171,27 @@ In the UI, go to the "Analyze" page (top menu) to:
 - view the predicted class (Parasitized / Uninfected) and probabilities
 
 CORS Note: the server allows any origin in development. For production, restrict origins on the server as needed.
+
+### Run the Inference UI (Yew + Trunk)
+This repository also contains a Rust/Yew-based web UI that mirrors the React app’s functionality.
+
+Requirements:
+- Rust target `wasm32-unknown-unknown`
+- Trunk (install with `cargo install trunk`)
+
+Steps:
+```bash
+rustup target add wasm32-unknown-unknown
+cd inference-ui
+
+# Optional: override API base similar to Vite's VITE_API_BASE
+# You can define a global at runtime before the WASM is loaded in index.html, e.g.:
+# <script>window.VITE_API_BASE = "http://localhost:8080";</script>
+
+trunk serve --open
+# opens http://127.0.0.1:8080 or similar; it will proxy static files. Ensure the Rust API is running separately.
+```
+
+Notes:
+- The Yew UI implements the Analyze flow: health badge, file picker/drag & drop preview, POST `/predict`, and probability bars.
+- Styling is kept lightweight but matches the current dark theme and layout.
