@@ -12,10 +12,18 @@ pub struct PredictResponse {
 
 fn api_base() -> String {
     let w = window().unwrap();
+    // 1) If hosted on Render, point to the Render API domain
+    if let Some(loc) = w.location().host().ok() {
+        if loc.ends_with("onrender.com") {
+            return "https://malaria-inference-api.onrender.com".to_string();
+        }
+    }
+    // 2) Allow runtime override via a global variable (can be injected by an inline script)
     if let Ok(Some(val)) = js_sys::Reflect::get(&w, &JsValue::from_str("VITE_API_BASE")).map(|v| v.as_string()) {
         let trimmed = val.trim_end_matches('/').to_string();
         if !trimmed.is_empty() { return trimmed; }
     }
+    // 3) Fallback to local development API
     "http://localhost:8080".to_string()
 }
 
